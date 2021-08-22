@@ -16,7 +16,6 @@ function Sidebar() {
   const [chatsSnapshot, loading, error] = useCollection(userChatRef);
 
   const createChat = useCallback((email) => {
-    console.log(email);
     db.collection('chats').add({
       users: [user.email, email],
     });

@@ -8,7 +8,6 @@ import getRecipientEmail from '../../utils/getRecipientEmail';
 
 function Chat({ chat, messages }) {
   const [user] = useAuthState(auth);
-  console.log(chat, messages);
 
   return (
     <Container>
@@ -17,14 +16,14 @@ function Chat({ chat, messages }) {
       </Head>
       <Sidebar />
       <ChatContainer>
-        <ChatScreen />
+        <ChatScreen chat={chat} messages={messages} />
       </ChatContainer>
     </Container>
   )
 }
-
 export default Chat;
 
+// This serverside function gives you result data inside the component props like chat, messages here
 export async function getServerSideProps(context) {
   const ref = db.collection('chats').doc(context.query.id);
   //Prepair messages on server

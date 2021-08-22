@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import styled from 'styled-components';
 import { Avatar, IconButton } from '@material-ui/core';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -7,18 +7,25 @@ import AttachFileIcon from '@material-ui/icons/AttachFile';
 import { useRouter } from 'next/router'
 import { useCollection } from 'react-firebase-hooks/firestore';
 import { auth, db } from '../firebase';
-import { Message } from '../components/Message';
+import Message from '../components/Message';
 import InsertEmoticonIcon from '@material-ui/icons/InsertEmoticon';
 import MicIcon from '@material-ui/icons/Mic';
+import firebase from 'firebase';
+import TimeAgo from 'timeago-react';
+import getRecipientEmail from '../utils/getRecipientEmail';
 
 function ChatScreen({ chat, messages }) {
   const [input, setInput] = useState('');
+  const endOfMessageRef = useRef(null);
   const router = useRouter();
   const [user] = useAuthState(auth);
   const [messagesSnapshot] = useCollection(db.collection('chats')
     .doc(router.query.id)
     .collection('messages')
     .orderBy('timestamp', 'asc'));
+  const recipientEmail = getRecipientEmail(chat.users, user);
+  const [recipientSnapshot] = useCollection(db.collection('users')
+    .where('email', '==', recipientEmail));
 
   const showMessage = () => {
     if (messagesSnapshot) {
@@ -26,11 +33,29 @@ function ChatScreen({ chat, messages }) {
         <Message
           key={message.id}
           user={message.data().user}
-          message={{ ...message.data(), timestamp: messages.timestamp.toDate().getTime(), }}
+          message={{
+            ...message.data(),
+            timestamp: message.data().timestamp?.toDate().getTime(),
+          }}
         />
       ))
+    } else {
+      return JSON.parse(messages).map(message => (
+        <Message
+          key={message.id}
+          user={message.user}
+          message={message}
+        />
+      ));
     }
   };
+
+  const ScrollToView = useCallback(() => {
+    endOfMessageRef.current.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }, [endOfMessageRef]);
 
   const handleInputChange = useCallback(({ target: { value } }) => {
     setInput(value);
@@ -38,16 +63,40 @@ function ChatScreen({ chat, messages }) {
 
   const sendMessage = useCallback((e) => {
     e.preventDefault();
-    console.log(input);
-  }, [input]);
+    // Update last seen
+    db.collection('users').doc(user.uid).set({
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    db.collection('chats').doc(router.query.id).collection('messages').add({
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      message: input,
+      user: user.email,
+      photoURL: user.photoURL
+    });
+    setInput("");
+    ScrollToView();
+  }, [input, user, router, ScrollToView]);
+
+  const recipient = recipientSnapshot?.docs?.[0]?.data();
 
   return (
     <Container>
       <Header>
-        <Avatar />
+        {recipient ? (
+          <Avatar src={recipient?.photoUrl} />
+        ) : (
+          <Avatar>{recipientEmail[0]}</Avatar>
+        )}
         <HeaderInformation>
-          <h3>Email</h3>
-          <p>Last seen...</p>
+          <h3>{recipientEmail}</h3>
+          {recipientSnapshot ? (
+            <p>Last Active:{" "}
+              {recipient?.lastSeen?.toDate() ? (
+                <TimeAgo datetime={recipient?.lastSeen?.toDate()} />
+              ) : "A long time ago"}
+            </p>
+          ) : (<p>Loading...</p>)}
         </HeaderInformation>
         <HeaderIcons>
           <IconButton>
@@ -60,7 +109,7 @@ function ChatScreen({ chat, messages }) {
       </Header>
       <MessageContainer>
         {showMessage()}
-        <EndOfMessage />
+        <EndOfMessage ref={endOfMessageRef} />
       </MessageContainer>
       <InputContainer>
         <InsertEmoticonIcon />
@@ -133,4 +182,5 @@ const MessageContainer = styled.div`
 `;
 
 const EndOfMessage = styled.div`
+  margin-bottom: 50px;
 `;
