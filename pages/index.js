@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar'
 
 export default function Home() {
   return (
-    <div >
+    <div>
       <Head>
         <title>Max Chat</title>
         <meta name="description" content="A Fast-Lightweight Messenger" />
